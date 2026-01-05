@@ -1,0 +1,61 @@
+name: CSS Linting
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**/*.css'
+      - '.github/workflows/css-lint.yml'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'frontend/.stylelintrc.json'
+      - 'frontend/validate-tailwind.mjs'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**/*.css'
+      - '.github/workflows/css-lint.yml'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'frontend/.stylelintrc.json'
+      - 'frontend/validate-tailwind.mjs'
+  workflow_dispatch:
+
+jobs:
+  lint-css:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      
+      - name: Run Stylelint
+        working-directory: frontend
+        run: npm run lint:css
+      
+      - name: Validate Tailwind CSS config
+        working-directory: frontend
+        run: node validate-tailwind.mjs
+      
+      - name: Build check (PostCSS validation)
+        working-directory: frontend
+        run: npm run build
+
