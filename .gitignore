@@ -1,0 +1,104 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Flask instance folder
+backend/instance/
+instance/
+
+# Logs
+*.log
+production.log
+backend/production.log
+logs/
+*.log.*
+
+# Temporary files
+bad_extractions_ids.txt
+backend/scripts/bad_extractions_ids.txt
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Test coverage
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Frontend test coverage
+frontend/coverage/
+frontend/.nyc_output
+
+# E2E test results
+e2e/test-results/
+e2e/playwright-report/
+e2e/playwright/.cache/
+
+# Test databases
+*.test.db
+test_*.db
+
+# Node modules (if not already ignored)
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+
+# Hugging Face Spaces
+.huggingface/
+
+# SSL/TLS Certificates and Keys (NEVER commit these!)
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+certs/
+*.csr
+ssl/
+interview/
