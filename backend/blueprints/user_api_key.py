@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""
+User API Key Management Blueprint
+Handles user API key operations through REST API
+"""
+
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+import os
+from datetime import datetime
+from models import db, User
+
+# Lazy imports to avoid import-time dependency issues
+def get_multi_user_api_manager():
+    """Lazy import of multi-user API manager"""
+    try:
+        from services.multi_user_api_manager import add_user_api_key, get_user_api_stats, check_user_rate_limit, get_user_api_key, api_manager
+        return add_user_api_key, get_user_api_stats, check_user_rate_limit, get_user_api_key, api_manager
+    except ImportError as e:
+        raise ImportError(f"Multi-user API manager not available: {e}")
+
+# Create blueprint
+user_api_key_bp = Blueprint('user_api_key', __name__, url_prefix='/api/user')
+
+@user_api_key_bp.route('/api-key', methods=['POST'])
+@jwt_required()
+def add_api_key():
+    """Add or update user's API key"""
+    try:
+        # Lazy import
+        add_user_api_key, _, _, _, _ = get_multi_user_api_manager()
+
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        api_key = data.get('api_key')
+        api_key_name = data.get('api_key_name', 'My API Key')
+        user_id = int(get_jwt_identity())
+
+        if not api_key:
+            return jsonify({'error': 'API key is required'}), 400
+
+        # Validate API key format
+        if len(api_key) < 25:
+            return jsonify({'error': 'Invalid API key format'}), 400
+
+        # Add API key for user
+        success = add_user_api_key(user_id, api_key, api_key_name)
+
+        if success:
+            # Clear cache to ensure fresh data on next retrieval
+            _, _, _, _, api_manager = get_multi_user_api_manager()
+            if user_id in api_manager.user_api_keys:
+                # Don't delete, just reload to get fresh encrypted key
+                api_manager.load_user_api_keys()
+            
+            # CRITICAL: Clear cached API key status when key is added/updated
+            try:
+                from utils.redis_utils import RedisCache
+                redis_cache = RedisCache()
+                if redis_cache.connected:
+                    cache_key = f"api_key_status:{user_id}"
+                    redis_cache.redis_client.delete(cache_key)
+            except Exception as cache_error:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to clear cache: {cache_error}")
+            
+            return jsonify({
+                'message': 'API key added successfully',
+                'user_id': user_id,
+                'api_key_name': api_key_name
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to add API key'}), 500
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@user_api_key_bp.route('/api-key', methods=['GET'])
+@jwt_required()
+def get_api_key_info():
+    """Get user's API key information (without exposing the actual key)"""
+    try:
+        user_id = int(get_jwt_identity())
+        
+        # Get API key info from database (refresh to get latest data)
+        user = db.session.query(User).filter_by(id=user_id).first()
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Refresh to ensure we have latest data
+        db.session.refresh(user)
+        metadata = getattr(user, 'user_metadata', {}) or {}
+        api_key_info = metadata.get('api_key', {})
+        
+        if not api_key_info:
+            return jsonify({
+                'has_api_key': False,
+                'message': 'No API key configured'
+            }), 200
+        
+        return jsonify({
+            'has_api_key': True,
+            'api_key_name': api_key_info.get('name', 'Unknown'),
+            'status': api_key_info.get('status', 'unknown'),
+            'created_at': api_key_info.get('created_at'),
+            'last_used': api_key_info.get('last_used')
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@user_api_key_bp.route('/api-key', methods=['DELETE'])
+@jwt_required()
+def remove_api_key():
+    """Remove user's API key"""
+    try:
+        # Lazy import
+        _, _, _, get_user_api_key, api_manager = get_multi_user_api_manager()
+
+        user_id = int(get_jwt_identity())
+
+        # Get user and remove API key info
+        user = db.session.query(User).filter_by(id=user_id).first()
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        metadata = dict(user.user_metadata) if user.user_metadata else {}
+
+        if 'api_key' in metadata:
+            # CRITICAL: Get the actual API key BEFORE deleting it
+            # so we can add it to the revocation list
+            try:
+                api_key = get_user_api_key(user_id)
+                
+                # Add to revocation list for immediate invalidation
+                if api_key:
+                    from services.api_key_revocation_manager import get_revocation_manager
+                    revocation_manager = get_revocation_manager()
+                    revocation_manager.revoke_api_key(api_key, user_id=user_id)
+            except Exception as e:
+                # Log but continue with deletion
+                import logging
+                logging.getLogger(__name__).warning(f"Could not revoke API key for user {user_id}: {e}")
+            
+            # Now delete from database
+            del metadata['api_key']
+            user.user_metadata = metadata
+            
+            # Tell SQLAlchemy that the JSON field has been modified
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(user, 'user_metadata')
+            
+            db.session.flush()
+            db.session.commit()
+            
+            # Refresh to ensure changes are saved
+            db.session.refresh(user)
+
+            # Also remove from memory cache
+            if user_id in api_manager.user_api_keys:
+                del api_manager.user_api_keys[user_id]
+            
+            # CRITICAL: Clear cached API key status when key is deleted
+            try:
+                from utils.redis_utils import RedisCache
+                redis_cache = RedisCache()
+                if redis_cache.connected:
+                    cache_key = f"api_key_status:{user_id}"
+                    redis_cache.redis_client.delete(cache_key)
+            except Exception as cache_error:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to clear cache: {cache_error}")
+
+            return jsonify({
+                'message': 'API key removed and revoked successfully'
+            }), 200
+        else:
+            return jsonify({
+                'message': 'No API key to remove'
+            }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@user_api_key_bp.route('/api-key/status', methods=['GET'])
+@jwt_required()
+def get_api_key_status():
+    """Get user's API key status and usage statistics (CACHED)"""
+    try:
+        # Lazy import
+        _, get_user_api_stats, _, _, _ = get_multi_user_api_manager()
+
+        user_id = int(get_jwt_identity())
+
+        # CRITICAL: Cache API key status to reduce DB hits
+        # Cache key: api_key_status:<user_id>
+        # TTL: 5 minutes (balance between freshness and performance)
+        from utils.redis_utils import RedisCache
+        redis_cache = RedisCache()
+        
+        cache_key = f"api_key_status:{user_id}"
+        
+        # Try to get from cache first
+        if redis_cache.connected:
+            try:
+                import json
+                cached_stats = redis_cache.redis_client.get(cache_key)
+                if cached_stats:
+                    # Return cached response
+                    return jsonify(json.loads(cached_stats)), 200
+            except Exception as cache_error:
+                # If cache fails, continue to DB
+                import logging
+                logging.getLogger(__name__).warning(f"Cache read failed: {cache_error}")
+
+        # Get comprehensive API stats from DB
+        stats = get_user_api_stats(user_id)
+
+        if not stats:
+            response_data = {
+                'has_api_key': False,
+                'api_key_status': 'none',
+                'requests_today': 0,
+                'requests_this_month': 0,
+                'daily_limit': 1500,
+                'monthly_limit': 45000,
+                'can_make_request': False,
+                'message': 'No API key configured'
+            }
+        else:
+            response_data = stats
+        
+        # Cache the response for 5 minutes (300 seconds)
+        if redis_cache.connected:
+            try:
+                import json
+                redis_cache.redis_client.setex(
+                    cache_key,
+                    300,  # 5 minutes TTL
+                    json.dumps(response_data)
+                )
+            except Exception as cache_error:
+                # Log but don't fail the request
+                import logging
+                logging.getLogger(__name__).warning(f"Cache write failed: {cache_error}")
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@user_api_key_bp.route('/api-key/test', methods=['POST'])
+@jwt_required()
+def test_api_key():
+    """Test if user's API key is valid"""
+    try:
+        # Lazy import
+        _, _, _, get_user_api_key, api_manager = get_multi_user_api_manager()
+
+        user_id = int(get_jwt_identity())
+
+        # Get user's API key
+        api_key = get_user_api_key(user_id)
+
+        if not api_key or api_key == os.environ.get('GEMINI_API_KEY'):
+            # Check if user has their own key
+            user = db.session.query(User).filter_by(id=user_id).first()
+            if user:
+                metadata = user.user_metadata or {}
+                api_key_info = metadata.get('api_key', {})
+                if not api_key_info:
+                    return jsonify({
+                        'valid': False,
+                        'message': 'No API key configured. Using default key.'
+                    }), 200
+
+        # Test the API key by making a simple request
+        try:
+            from gemini_utils import GeminiAnalyzer
+
+            if not api_key:
+                return jsonify({
+                    'valid': False,
+                    'message': 'API key not found'
+                }), 200
+
+            # Test with Gemini
+            analyzer = GeminiAnalyzer(api_key=api_key)
+            test_response = analyzer.model.generate_content("Test")
+
+            if test_response and test_response.text:
+                return jsonify({
+                    'valid': True,
+                    'message': 'API key is valid and working',
+                    'is_user_key': user_id in api_manager.user_api_keys
+                }), 200
+            else:
+                return jsonify({
+                    'valid': False,
+                    'message': 'API key test failed - no response'
+                }), 200
+
+        except Exception as test_error:
+            return jsonify({
+                'valid': False,
+                'message': f'API key test failed: {str(test_error)}'
+            }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@user_api_key_bp.route('/api-key/usage', methods=['GET'])
+@jwt_required()
+def get_api_usage():
+    """Get detailed API usage statistics"""
+    try:
+        # Lazy import
+        _, get_user_api_stats, check_user_rate_limit, _, _ = get_multi_user_api_manager()
+
+        user_id = int(get_jwt_identity())
+
+        # Get rate limit status
+        rate_status = check_user_rate_limit(user_id)
+
+        # Get API stats
+        stats = get_user_api_stats(user_id)
+
+        # Combine information
+        usage_info = {
+            'user_id': user_id,
+            'rate_limits': rate_status,
+            'usage_stats': stats,
+            'limits': {
+                'requests_per_minute': 15,
+                'requests_per_day': 1500,
+                'requests_per_month': 45000
+            }
+        }
+
+        return jsonify(usage_info), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+# Register blueprint with app
+def init_app(app):
+    app.register_blueprint(user_api_key_bp) 
