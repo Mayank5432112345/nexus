@@ -1,0 +1,56 @@
+<svg width="280" height="100" viewBox="0 0 280 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for lightning bolt -->
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4DD0E1;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#14B8A6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Glow filter for lightning bolt - Softer glow -->
+    <filter id="logoGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Lightning bolt icon - Properly aligned -->
+  <g transform="translate(5, 15) scale(1.6)">
+    <path 
+      d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" 
+      stroke="url(#logoGradient)" 
+      stroke-width="2.5" 
+      stroke-linecap="round" 
+      stroke-linejoin="round"
+      fill="url(#logoGradient)"
+      filter="url(#logoGlow)"/>
+  </g>
+  
+  <!-- Fuze text - Top aligned with top of bolt -->
+  <text 
+    x="50" 
+    y="15" 
+    font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+    font-size="34" 
+    font-weight="700" 
+    fill="url(#logoGradient)"
+    letter-spacing="-0.5px"
+    dominant-baseline="hanging">
+    Fuze
+  </text>
+  
+  <!-- Tagline - Properly positioned below Fuze -->
+  <text 
+    x="50" 
+    y="58" 
+    font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+    font-size="12" 
+    font-weight="500" 
+    fill="#94A3B8"
+    letter-spacing="0.4px">
+    Strike through the chaos
+  </text>
+</svg>

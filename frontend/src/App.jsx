@@ -1,0 +1,326 @@
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import Landing from './pages/Landing';
+import Login from './pages/Login';
+import Sidebar from './components/Sidebar';
+import ProtectedRoute from './components/ProtectedRoute';
+import OnboardingModal from './components/OnboardingModal';
+import Loader from './components/Loader';
+import OAuthCallback from './pages/OAuthCallback';
+import api from './services/api';
+import './App.css';
+
+// Lazy load routes for code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Projects = lazy(() => import('./pages/Projects'));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const Recommendations = lazy(() => import('./pages/Recommendations'));
+const Bookmarks = lazy(() => import('./pages/Bookmarks'));
+const SaveContent = lazy(() => import('./pages/SaveContent'));
+const ShareHandler = lazy(() => import('./pages/ShareHandler'));
+const ExtensionDownload = lazy(() => import('./pages/ExtensionDownload'));
+
+function AppContent() {
+  const { user, loading, isAuthenticated } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(true); // Start collapsed by default
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 900);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Global OAuth processor for mobile/PWA flows.
+  // If token appears on any route, complete exchange immediately (without relying on callback route rendering).
+  useEffect(() => {
+    const OAUTH_LOCK_KEY = 'oauth_exchange_in_progress';
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const queryParams = new URLSearchParams(window.location.search);
+    const token = hashParams.get('access_token') || queryParams.get('access_token');
+    const errorDescription = hashParams.get('error_description') || queryParams.get('error_description');
+
+    if (!token && !errorDescription) {
+      return;
+    }
+
+    if (sessionStorage.getItem(OAUTH_LOCK_KEY) === '1') {
+      return;
+    }
+
+    const processOAuth = async () => {
+      try {
+        sessionStorage.setItem(OAUTH_LOCK_KEY, '1');
+
+        if (errorDescription) {
+          window.history.replaceState({}, document.title, '/login');
+          navigate('/login', { replace: true });
+          return;
+        }
+
+        const res = await api.post('/api/auth/supabase-oauth', { access_token: token });
+        const { access_token: localAccessToken, user: oauthUser } = res.data || {};
+
+        if (!localAccessToken) {
+          throw new Error('No local access token returned from backend');
+        }
+
+        localStorage.setItem('token', localAccessToken);
+        if (oauthUser) {
+          localStorage.setItem('user', JSON.stringify(oauthUser));
+        }
+        api.defaults.headers.common.Authorization = `Bearer ${localAccessToken}`;
+        window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: { user: oauthUser } }));
+
+        window.history.replaceState({}, document.title, '/dashboard');
+        navigate('/dashboard', { replace: true });
+      } catch (err) {
+        console.error('[OAuth][Global] Failed to process OAuth token:', err?.message || err);
+        window.history.replaceState({}, document.title, '/login');
+        navigate('/login', { replace: true });
+      } finally {
+        sessionStorage.removeItem(OAUTH_LOCK_KEY);
+      }
+    };
+
+    processOAuth();
+  }, [location.hash, location.search, navigate]);
+  
+  // Don't show sidebar on landing page or login page
+  const showSidebar = user && location.pathname !== '/' && location.pathname !== '/login';
+
+  // Debug: Log initial state (development only)
+  // Logging removed for production
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 900);
+      if (window.innerWidth > 900) {
+        setSidebarOpen(false);
+        setCollapsed(false); // Keep expanded on desktop
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Check if onboarding should be shown - listen for API key status from dashboard
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      const handleApiKeyStatus = (event) => {
+        const hasApiKey = event.detail?.has_api_key || false;
+        
+        // Show onboarding if:
+        // 1. User explicitly requested it (show_onboarding flag), OR
+        // 2. User doesn't have API key (regardless of completion status - they need to set it up)
+        const explicitRequest = localStorage.getItem('show_onboarding') === 'true';
+        const notCompleted = localStorage.getItem('onboarding_completed') !== 'true';
+        
+        // If user doesn't have API key, always show onboarding (reset completion if needed)
+        if (!hasApiKey && localStorage.getItem('onboarding_completed') === 'true') {
+          localStorage.removeItem('onboarding_completed');
+        }
+        
+        const shouldShow = explicitRequest || (!hasApiKey && notCompleted);
+        setShowOnboarding(shouldShow);
+      };
+      
+      // Listen for API key status event from dashboard
+      window.addEventListener('apiKeyStatus', handleApiKeyStatus);
+      
+      // Also check initial state from localStorage
+      const explicitRequest = localStorage.getItem('show_onboarding') === 'true';
+      const notCompleted = localStorage.getItem('onboarding_completed') !== 'true';
+      if (explicitRequest && notCompleted) {
+        setShowOnboarding(true);
+      }
+      
+      return () => window.removeEventListener('apiKeyStatus', handleApiKeyStatus);
+    }
+  }, [isAuthenticated, loading]);
+
+  // Listen for API key added event and showOnboarding event
+  useEffect(() => {
+    const handleApiKeyAdded = async () => {
+      if (isAuthenticated && !loading) {
+        // When API key is added, keep showing onboarding so user can continue to extension step
+        // The modal will handle progression to step 2 automatically
+        const explicitRequest = localStorage.getItem('show_onboarding') === 'true';
+        if (explicitRequest) {
+          setShowOnboarding(true);
+        }
+      }
+    };
+    
+    const handleShowOnboarding = () => {
+      if (isAuthenticated && !loading) {
+        localStorage.setItem('show_onboarding', 'true');
+        localStorage.removeItem('onboarding_completed');
+        setShowOnboarding(true);
+      }
+    };
+    
+    window.addEventListener('apiKeyAdded', handleApiKeyAdded);
+    window.addEventListener('showOnboarding', handleShowOnboarding);
+    return () => {
+      window.removeEventListener('apiKeyAdded', handleApiKeyAdded);
+      window.removeEventListener('showOnboarding', handleShowOnboarding);
+    };
+  }, [isAuthenticated, loading]);
+
+  // Add sidebar state class to body - CRITICAL for layout
+  useEffect(() => {
+    // Clear all classes first
+    document.body.classList.remove('sidebar-collapsed', 'sidebar-expanded');
+    
+    if (!isMobile) {
+      if (collapsed) {
+        document.body.classList.add('sidebar-collapsed');
+      } else {
+        document.body.classList.add('sidebar-expanded');
+      }
+      
+      // Force immediate layout recalculation
+      document.body.offsetHeight;
+      
+      // Force a repaint to ensure layout is applied
+      window.requestAnimationFrame(() => {
+        document.body.offsetHeight;
+      });
+    }
+    
+    // Debug: log current body classes (development only)
+    // Logging removed for production
+  }, [collapsed, isMobile]);
+
+  // Ensure initial body class is applied on mount
+  useEffect(() => {
+    if (!isMobile) {
+      // Apply immediately without delay to fix layout
+      document.body.classList.add('sidebar-collapsed'); // Start collapsed
+      
+      // Force layout recalculation
+      document.body.offsetHeight;
+    }
+  }, [isMobile]); // Include isMobile dependency
+
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    localStorage.removeItem('show_onboarding');
+  };
+
+  return (
+    <div className="App">
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <OnboardingModal onComplete={handleOnboardingComplete} />
+      )}
+      <div className="app-container">
+        {showSidebar && (
+          <Sidebar
+            isOpen={isMobile ? sidebarOpen : true}
+            onClose={() => setSidebarOpen(false)}
+            onToggle={() => setSidebarOpen(!sidebarOpen)}
+            collapsed={!isMobile && collapsed}
+            setCollapsed={setCollapsed}
+            isMobile={isMobile}
+          />
+        )}
+        <main className="main-content">
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader fullScreen={false} message="Loading..." size="medium" /></div>}>
+            <Routes>
+              <Route 
+                path="/" 
+                element={<Landing />} 
+              />
+              <Route 
+                path="/login" 
+                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} 
+              />
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/profile" 
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/projects" 
+                element={
+                  <ProtectedRoute>
+                    <Projects />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/projects/:id" 
+                element={
+                  <ProtectedRoute>
+                    <ProjectDetail />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/recommendations" 
+                element={
+                  <ProtectedRoute>
+                    <Recommendations />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/bookmarks" 
+                element={
+                  <ProtectedRoute>
+                    <Bookmarks />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/save-content" 
+                element={
+                  <ProtectedRoute>
+                    <SaveContent />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/share" 
+                element={<ShareHandler />} 
+              />
+              <Route 
+                path="/extension/download" 
+                element={<ExtensionDownload />} 
+              />
+              <Route 
+                path="/oauth/callback" 
+                element={<OAuthCallback />} 
+              />
+
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+}
+
+export default App;
