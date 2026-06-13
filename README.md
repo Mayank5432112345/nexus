@@ -131,7 +131,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/Mayank5432112345/Fuze.git
+git clone https://github.com/Mayank5432112345/nexus.git
 cd Fuze
 
 # Create virtual environment

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const DEFAULT_PROD_API_URL = 'https://Mayank5432112345-fuze-backend.hf.space'
+const DEFAULT_PROD_API_URL = 'https://Mayankkatno-fuze-backend.hf.space'
 
 // Get base URL from environment or automatically detect
 const getBaseURL = () => {

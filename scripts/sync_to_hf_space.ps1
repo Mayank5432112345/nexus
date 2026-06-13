@@ -11,7 +11,7 @@ $HFSpacePath = "$env:USERPROFILE\OneDrive\Desktop\fuze-backend"
 if (-not (Test-Path $HFSpacePath)) {
     Write-Host "❌ Hugging Face Space not found at: $HFSpacePath" -ForegroundColor Red
     Write-Host "📝 Please clone it first:" -ForegroundColor Yellow
-    Write-Host "   git clone https://huggingface.co/spaces/Mayank5432112345/fuze-backend $HFSpacePath" -ForegroundColor Cyan
+    Write-Host "   git clone https://huggingface.co/spaces/Mayankkatno/fuze-backend $HFSpacePath" -ForegroundColor Cyan
     exit 1
 }
 

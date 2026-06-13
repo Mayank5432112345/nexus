@@ -30,7 +30,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git clone https://huggingface:$HF_TOKEN@huggingface.co/spaces/Mayank5432112345/fuze-backend hf-space
+          git clone https://huggingface:$HF_TOKEN@huggingface.co/spaces/Mayankkatno/fuze-backend hf-space
           cd hf-space
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
@@ -55,6 +55,6 @@ jobs:
           # Get current branch name (HF Spaces might use 'main' or 'master')
           BRANCH=$(git branch --show-current || echo "main")
           # Configure git to use the token
-          git remote set-url origin https://huggingface:$HF_TOKEN@huggingface.co/spaces/Mayank5432112345/fuze-backend
+          git remote set-url origin https://huggingface:$HF_TOKEN@huggingface.co/spaces/Mayankkatno/fuze-backend
           # Push changes
           git push origin HEAD:$BRANCH

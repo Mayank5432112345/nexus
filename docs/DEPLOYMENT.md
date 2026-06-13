@@ -393,7 +393,7 @@ Same environment variables as before - no changes needed:
 ### Current Setup
 
 **Frontend**: `itsfuze.vercel.app`  
-**Backend**: `Mayank5432112345-fuze-backend.hf.space`
+**Backend**: `Mayankkatno-fuze-backend.hf.space`
 
 ### Step 1: Update Vercel Environment Variable
 
@@ -404,7 +404,7 @@ Your frontend **requires** `VITE_API_URL` to be set in Vercel.
 3. Go to **Settings** → **Environment Variables**
 4. Add or update:
    ```
-   VITE_API_URL=https://Mayank5432112345-fuze-backend.hf.space
+   VITE_API_URL=https://Mayankkatno-fuze-backend.hf.space
    ```
 5. **Important**: Make sure it's set for **Production** environment
 6. Click **Save**
@@ -423,11 +423,11 @@ After updating the environment variable:
 
 Make sure your Hugging Face Spaces backend has the correct CORS configuration:
 
-1. Go to: https://huggingface.co/spaces/Mayank5432112345/fuze-backend
+1. Go to: https://huggingface.co/spaces/Mayankkatno/fuze-backend
 2. **Settings** → **Variables**
 3. Check `CORS_ORIGINS` includes:
    ```
-   https://itsfuze.vercel.app,https://Mayank5432112345-fuze-backend.hf.space
+   https://itsfuze.vercel.app,https://Mayankkatno-fuze-backend.hf.space
    ```
 
 ### Verification Checklist
