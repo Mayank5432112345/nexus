@@ -10,5 +10,5 @@ from backend.wsgi import app
 # Export for gunicorn
 __all__ = ['app']
 
-# Trigger deployment sync for Mayankkatno
+# Trigger deployment sync to newly created space
 
