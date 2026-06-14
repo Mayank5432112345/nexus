@@ -8,7 +8,7 @@ import re
 import difflib
 from typing import List, Dict, Tuple, Optional
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+
 
 class UniversalSemanticMatcher:
     """Universal semantic matcher that handles all variations"""
@@ -157,6 +157,7 @@ class UniversalSemanticMatcher:
             embeddings = self.embedding_model.encode([norm_text1, norm_text2])
             
             # Calculate cosine similarity
+            from sklearn.metrics.pairwise import cosine_similarity
             similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
             
             return float(similarity)

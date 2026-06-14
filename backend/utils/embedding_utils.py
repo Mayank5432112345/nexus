@@ -1,7 +1,5 @@
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from .redis_utils import redis_cache
-from sklearn.metrics.pairwise import cosine_similarity
 import logging
 import os
 import shutil
@@ -79,6 +77,7 @@ def _initialize_embedding_model_robust():
             
             # Initialize the model with error handling for meta tensors
             try:
+                from sentence_transformers import SentenceTransformer
                 model = SentenceTransformer(model_name)
             except Exception as init_error:
                 if "meta tensor" in str(init_error):
@@ -86,6 +85,7 @@ def _initialize_embedding_model_robust():
                     # Force clear cache and retry once
                     _force_clear_model_cache(model_name)
                     try:
+                        from sentence_transformers import SentenceTransformer
                         model = SentenceTransformer(model_name)
                     except Exception as retry_error:
                         logger.warning(f"Failed to load model {model_name} even after cache clear: {retry_error}")
@@ -131,6 +131,7 @@ def _clear_model_cache_if_needed(model_name):
         if os.path.exists(model_cache_path):
             # Check if cache is corrupted by trying to load
             try:
+                from sentence_transformers import SentenceTransformer
                 test_model = SentenceTransformer(model_name)
                 del test_model
                 logger.info(f" Model cache for {model_name} is valid")
@@ -267,6 +268,7 @@ def calculate_cosine_similarity(embedding1, embedding2):
         if embedding2.ndim == 1:
             embedding2 = embedding2.reshape(1, -1)
         
+        from sklearn.metrics.pairwise import cosine_similarity
         similarity = cosine_similarity(embedding1, embedding2)[0][0]
         return float(similarity)
     except Exception as e:
