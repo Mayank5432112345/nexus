@@ -19,9 +19,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel --root-user-action=ignore && \
     pip install --no-cache-dir --prefer-binary -r requirements.txt --root-user-action=ignore
 
-# Install Scrapling browsers (required for Scrapling to work)
-RUN camoufox fetch || echo "Camoufox fetch completed"
-
 # Copy application code
 COPY backend/ ./backend/
 COPY wsgi.py .
