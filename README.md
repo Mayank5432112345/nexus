@@ -66,7 +66,8 @@
 ### Dashboard
 <div align="center">
 
-<img width="1920" height="1080" alt="Screenshot 2025-11-24 025912" src="https://github.com/user-attachments/assets/d35f995f-60a7-48f2-bb42-4d3ce8cedc39" />
+<img src="screenshots/dashboard_top.png" alt="Dashboard Top" width="1920" />
+<img src="screenshots/dashboard_bottom.png" alt="Dashboard Bottom" width="1920" />
 
 
 *Overview of your bookmarks, projects, and statistics*
@@ -110,7 +111,8 @@
 ### Profile & Settings
 <div align="center">
 
-<img width="1920" height="1080" alt="Screenshot 2025-11-24 035443" src="https://github.com/user-attachments/assets/341d5a7e-0458-470e-a488-cc26610f374c" />
+<img src="screenshots/profile_top.png" alt="Profile Top" width="1920" />
+<img src="screenshots/profile_api_key.png" alt="Profile API Key Management" width="1920" />
 
 
 *Manage your profile, API keys, and preferences*
