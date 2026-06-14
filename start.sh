@@ -41,7 +41,7 @@ trap cleanup SIGTERM SIGINT
 # Start Gunicorn web server (foreground)
 echo "Starting Gunicorn web server..."
 exec gunicorn app:app \
-    --bind 0.0.0.0:7860 \
+    --bind 0.0.0.0:${PORT:-7860} \
     --workers 1 \
     --worker-class gevent \
     --worker-connections 1000 \
